@@ -1,0 +1,42 @@
+const express = require('express');
+const http = require('http');
+const socketio = require('socket.io');
+const path = require('path');
+const PokerGame = require('./poker/game');
+
+const app = express();
+const server = http.createServer(app);
+const io = socketio(server, {
+  cors: {
+    origin: '*'
+  }
+});
+
+// Serve frontend
+app.use(express.static(path.join(__dirname, '../client/build')));
+
+// Poker game state
+let game = new PokerGame(9); // 9-max table
+
+// Socket.IO events
+io.on('connection', (socket) => {
+  console.log('User connected:', socket.id);
+
+  socket.on('join', (username) => {
+    const seat = game.addPlayer(socket.id, username);
+    io.emit('state', game.getPublicState());
+  });
+
+  socket.on('action', (action) => {
+    game.handleAction(socket.id, action);
+    io.emit('state', game.getPublicState());
+  });
+
+  socket.on('disconnect', () => {
+    game.removePlayer(socket.id);
+    io.emit('state', game.getPublicState());
+  });
+});
+
+const PORT = process.env.PORT || 4000;
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
